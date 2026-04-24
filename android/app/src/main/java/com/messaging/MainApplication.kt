@@ -1,4 +1,4 @@
-package com.mobile
+package com.messaging.software
 
 import android.app.Application
 import com.facebook.react.PackageList
