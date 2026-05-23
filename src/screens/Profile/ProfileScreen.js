@@ -295,52 +295,56 @@ const handleGalleryUpload = async () => {
   );
 };
 
-  const handleProfilePhotoUpload = () => {
-    const options = {
-      mediaType: 'photo',
-      includeBase64: false,
-      maxHeight: 500,
-      maxWidth: 500,
-    };
+const handleProfilePhotoUpload = () => {
+  // Cek dulu apakah profile sudah ada dan punya id
+  if (!profile || !profile.id) {
+    Alert.alert('Error', 'Data user tidak ditemukan. Silahkan refresh halaman profile.');
+    return;
+  }
 
-    launchImageLibrary(options, async (response) => {
-      if (response.didCancel) {
-        console.log('User cancelled image picker');
-      } else if (response.error) {
-        console.log('ImagePicker Error: ', response.error);
-        Alert.alert('Error', 'Failed to pick image');
-      } else if (response.assets && response.assets[0]) {
-        try {
-          setSaving(true);
-          
-          const imageAsset = response.assets[0];          
-          const responseData = await uploadProfilePhoto(
-            imageAsset.uri,
-            imageAsset.type,
-            imageAsset.fileName
-          );
-          
-          if (responseData.status) {
-            const updatedProfile = {
-              ...profile,
-              profile_picture: responseData.file_path || imageAsset.uri,
-            };
-            setProfile(updatedProfile);
-            await saveUserData(updatedProfile);
-            
-            Alert.alert('Success', 'Profile photo updated successfully');
-          } else {
-            throw new Error(responseData.message || 'Failed to upload profile photo');
-          }
-        } catch (error) {
-          console.log('Upload error:', error);
-          Alert.alert('Error', error.message || 'Failed to upload profile photo');
-        } finally {
-          setSaving(false);
-        }
-      }
-    });
+  const options = {
+    mediaType: 'photo',
+    includeBase64: false,
+    maxHeight: 500,
+    maxWidth: 500,
   };
+
+  launchImageLibrary(options, async (response) => {
+    if (response.didCancel) {
+      console.log('User cancelled image picker');
+    } else if (response.error) {
+      console.log('ImagePicker Error: ', response.error);
+      Alert.alert('Error', 'Gagal memilih gambar');
+    } else if (response.assets && response.assets[0]) {
+      try {
+        setSaving(true);
+        
+        const imageAsset = response.assets[0];
+        
+        // Kirim userId dengan benar
+        const responseData = await uploadProfilePhoto(
+          profile.id,        // userId (contoh: "Ug7Ow8=uYh8I")
+          imageAsset.uri,    // imageUri
+          imageAsset.type,   // imageType 
+          imageAsset.fileName // imageName
+        );
+        
+        if (responseData && responseData.status) {
+          // Refresh profile untuk ambil data terbaru
+          await fetchProfile();
+          Alert.alert('Sukses', 'Foto profile berhasil diupdate');
+        } else {
+          throw new Error(responseData?.message || 'Gagal upload foto profile');
+        }
+      } catch (error) {
+        console.log('Upload error detail:', error);
+        Alert.alert('Error', error.message || 'Gagal upload foto profile');
+      } finally {
+        setSaving(false);
+      }
+    }
+  });
+};
 
   // Render each picture input column
   const renderPictureItem = ({ item, index }) => (
@@ -425,6 +429,7 @@ const handleGalleryUpload = async () => {
             <Text style={styles.bio}>
               {profile?.gender === 'man' ? 'Male' : profile?.gender === 'woman' ? 'Female' : ''}
             </Text>
+              <Text style={styles.gender}>{profile?.id || 'User ID'}</Text>
           </View>
 
           <View style={styles.statsContainer}>
@@ -550,7 +555,7 @@ const handleGalleryUpload = async () => {
           </TouchableOpacity>
 
           <View style={styles.versionContainer}>
-            <Text style={styles.versionText}>Version 1.0.0</Text>
+            <Text style={styles.versionText}>Version 2.0.5</Text>
           </View>
         </ScrollView>
 
@@ -762,6 +767,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 5,
   },
+  gender: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 5,
+  },
+
   whatsapp: {
     fontSize: 13,
     color: '#25D366',

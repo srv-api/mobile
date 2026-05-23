@@ -17,9 +17,13 @@ import Update from '../screens/Update';
 import Home from '../screens/Home/HomeScreen';
 import Preferences from '../screens/Profile/Preferences';
 import PremiumAccess from '../screens/Profile/PremiumAccess';
+import GetStarLike from '../screens/Profile/GetStarLike';
 import VisitProfile from '../screens/Profile/VisitProfile';
-import Match from '../screens/Friend/Matches';
 import LikedYou from '../screens/Friend/Like';  
+import GetSee from '../screens/Friend/GetSee';
+import GetBoost from '../screens/Home/GetBoost';
+import GetGold from '../screens/Home/GetGold';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -74,7 +78,6 @@ export default function AppNavigator() {
       <Stack.Screen name="Preferences" component={Preferences} />
       <Stack.Screen name="Update" component={Update} options={{ headerShown: false }} />
       <Stack.Screen name="Home" component={Home} options={{ headerShown: false }} />
-      <Stack.Screen name="Match" component={Match} options={{ headerShown: false }}/>
       {/* Main App Screens */}
       <Stack.Screen 
         name="RoomList" 
@@ -85,6 +88,10 @@ export default function AppNavigator() {
       />
       <Stack.Screen name="Debug" component={DebugScreen} />
       <Stack.Screen name="PremiumAccess" component={PremiumAccess} options={{ headerShown: true, title: 'Premium Access', headerStyle: { backgroundColor: '#f8f9fa' }, headerTintColor: '#000', headerTitleStyle: { fontWeight: 'bold', fontSize: 18 } }} />
+      <Stack.Screen name="GetStarLike" component={GetStarLike} options={{ headerShown: true, title: 'Star', headerStyle: { backgroundColor: '#f8f9fa' }, headerTintColor: '#000', headerTitleStyle: { fontWeight: 'bold', fontSize: 18 } }} />
+      <Stack.Screen name="GetSee" component={GetSee} options={{ headerShown: true, title: 'Premium Gold', headerStyle: { backgroundColor: '#f8f9fa' }, headerTintColor: '#000', headerTitleStyle: { fontWeight: 'bold', fontSize: 18 } }} />
+      <Stack.Screen name="GetGold" component={GetGold} options={{ headerShown: true, title: 'Get Gold', headerStyle: { backgroundColor: '#f8f9fa' }, headerTintColor: '#000', headerTitleStyle: { fontWeight: 'bold', fontSize: 18 } }} />
+      <Stack.Screen name="GetBoost" component={GetBoost} options={{ headerShown: true, title: 'Choose your boost', headerStyle: { backgroundColor: '#f8f9fa' }, headerTintColor: '#000', headerTitleStyle: { fontWeight: 'bold', fontSize: 18 } }} />
       <Stack.Screen name="VisitProfile" component={VisitProfile} />
       <Stack.Screen name="LikedYou" component={LikedYou} options={{
           headerShown: true,

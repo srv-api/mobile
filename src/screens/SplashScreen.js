@@ -6,8 +6,9 @@ import {
   ActivityIndicator,
   Text,
   Animated,
+  Image,
 } from 'react-native';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { CommonActions, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
@@ -15,13 +16,17 @@ const API_REFRESH_URL = 'https://api.cashpay.co.id/auth/refresh';
 
 export default function SplashScreen() {
   const navigation = useNavigation();
+  const [isReady, setIsReady] = useState(false);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
   const [displayText, setDisplayText] = useState('');
   const [isTypingDone, setIsTypingDone] = useState(false);
-  const fullText = 'MiSee';
 
-  // Efek typing: muncul satu per satu
+  const fullText = 'Yuhuu!';
+
+  // ✨ Typing effect
   useEffect(() => {
     let index = 0;
     const interval = setInterval(() => {
@@ -30,13 +35,14 @@ export default function SplashScreen() {
         index++;
       } else {
         clearInterval(interval);
-        setIsTypingDone(true); // typing selesai
+        setIsTypingDone(true);
       }
-    }, 200);
+    }, 150);
+
     return () => clearInterval(interval);
   }, []);
 
-  // Animasi container
+  // ✨ Animasi logo
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -46,26 +52,33 @@ export default function SplashScreen() {
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        friction: 10,
-        tension: 50,
+        friction: 6,
+        tension: 80,
         useNativeDriver: true,
       }),
     ]).start();
   }, []);
 
-  // Navigasi setelah typing selesai + cek token
+  // Check if navigation is ready
   useEffect(() => {
-    if (!isTypingDone) return;
+    if (navigation.isReady()) {
+      setIsReady(true);
+    }
+  }, [navigation]);
+
+  // 🚀 Navigasi + cek token
+  useEffect(() => {
+    if (!isTypingDone || !isReady) return;
 
     const init = async () => {
-      // Beri jeda 500ms agar user melihat teks lengkap + loading sebentar
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      await new Promise(resolve => setTimeout(resolve, 700));
+
       let token = await AsyncStorage.getItem('access_token');
+
       if (!token) {
         token = await refreshAccessToken();
       }
-      
+
       if (!token) {
         navigation.dispatch(
           CommonActions.reset({
@@ -84,23 +97,33 @@ export default function SplashScreen() {
     };
 
     init();
-  }, [isTypingDone, navigation]);
+  }, [isTypingDone, isReady, navigation]);
 
+  // 🔄 Refresh token
   const refreshAccessToken = async () => {
     try {
       const refresh_token = await AsyncStorage.getItem('refresh_token');
       if (!refresh_token) return null;
-      const response = await axios.post(API_REFRESH_URL, {}, {
-        headers: { Authorization: `Bearer ${refresh_token}` }
-      });
+
+      const response = await axios.post(
+        API_REFRESH_URL,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${refresh_token}`,
+          },
+        }
+      );
+
       if (response.data?.data?.access_token) {
         const newToken = response.data.data.access_token;
         await AsyncStorage.setItem('access_token', newToken);
         return newToken;
       }
+
       return null;
     } catch (error) {
-      console.error('Refresh token error:', error);
+      console.log('Refresh token error:', error);
       return null;
     }
   };
@@ -116,19 +139,30 @@ export default function SplashScreen() {
           },
         ]}
       >
+        {/* 🔥 LOGO */}
+        <Animated.Image
+          source={require('../assets/yuhuu.png')} // pastikan path benar
+          style={styles.logo}
+          resizeMode="contain"
+        />
+
+        {/* ✨ TEXT */}
         <Text style={styles.appName}>{displayText}</Text>
+
+        {/* ⏳ LOADING */}
         {isTypingDone && (
-          <ActivityIndicator size="small" color="#999" style={styles.loader} />
+          <ActivityIndicator size="small" color="#000" style={styles.loader} />
         )}
       </Animated.View>
     </View>
   );
 }
 
+// 🎨 STYLE
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fdf2de',
+    backgroundColor: '#fff', // Fixed: was 'fff' (missing #)
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -136,16 +170,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  logo: {
+    width: 130,
+    height: 130,
+    marginBottom: 20,
+  },
   appName: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#075E54',
-    letterSpacing: 1,
-    marginBottom: 40,
-    minWidth: 120,
-    textAlign: 'center',
+    color: '#000',
+    letterSpacing: 1.5,
+    marginBottom: 30,
   },
   loader: {
-    marginTop: 8,
+    marginTop: 10,
   },
 });

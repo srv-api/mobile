@@ -32,7 +32,7 @@ const BirthdayStep = ({
       </View>
       
       <Text style={styles.ageNote}>
-        You must be at least 13 years old to join MiSee
+        You must be at least 13 years old to join Yuhuu!
       </Text>
     </>
   );

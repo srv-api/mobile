@@ -51,113 +51,129 @@ class MessageRepository {
   }
 
   // ✅ PERBAIKAN UTAMA: Get chat history dengan debug lengkap
-  async getChatHistory(userId1, userId2, limit = 20, offset = 0) {
-    if (!userId1 || !userId2) {
-      console.error('Invalid userId for getChatHistory');
+async getChatHistory(userId1, userId2, limit = 20, offset = 0) {
+  if (!userId1 || !userId2) {
+    console.error('Invalid userId for getChatHistory');
+    return [];
+  }
+  
+  try {
+    // ✅ Ambil SEMUA kolom
+    const query = `
+      SELECT 
+        id, text, sender_id, sender_name, receiver_id, receiver_name,
+        is_own, status, timestamp, created_at, type,
+        audio_path, audio_base64, duration
+      FROM messages 
+      WHERE (sender_id = ? AND receiver_id = ?) 
+         OR (sender_id = ? AND receiver_id = ?)
+      ORDER BY datetime(created_at) ASC
+      LIMIT ? OFFSET ?
+    `;
+    
+    const result = await executeQuery(query, [
+      userId1, userId2, 
+      userId2, userId1, 
+      limit, offset
+    ]);
+    
+    if (!result || !result.rows) {
       return [];
     }
     
-    try {
-      console.log(`🔍 Getting chat history: ${userId1} <-> ${userId2}, limit=${limit}, offset=${offset}`);
-      
-      // Query untuk mendapatkan pesan
-      const query = `
-        SELECT * FROM messages 
-        WHERE (sender_id = ? AND receiver_id = ?) 
-           OR (sender_id = ? AND receiver_id = ?)
-        ORDER BY datetime(created_at) ASC
-        LIMIT ? OFFSET ?
-      `;
-      
-      const result = await executeQuery(query, [
-        userId1, userId2, 
-        userId2, userId1, 
-        limit, offset
-      ]);
-      
-      if (!result || !result.rows) {
-        console.warn('No rows returned');
-        return [];
+    const messages = [];
+    for (let i = 0; i < result.rows.length; i++) {
+      const row = result.rows.item(i);
+      if (row) {
+        messages.push({
+          id: row.id,
+          text: row.text,
+          sender_id: row.sender_id,
+          sender_name: row.sender_name,
+          receiver_id: row.receiver_id,
+          receiver_name: row.receiver_name,
+          is_own: row.is_own,
+          status: row.status,
+          timestamp: row.timestamp,
+          created_at: row.created_at,
+          type: row.type || 'text',
+          audio_path: row.audio_path,
+          audio_base64: row.audio_base64,
+          duration: row.duration,
+        });
       }
-      
-      const messages = [];
-      const rowsLength = result.rows.length || 0;
-      
-      for (let i = 0; i < rowsLength; i++) {
-        const row = result.rows.item(i);
-        if (row) {
-          messages.push(row);
-        }
-      }
-      
-      console.log(`📱 Retrieved ${messages.length} messages from offset ${offset}`);
-      
-      // ✅ DEBUG: Log ID pesan yang diambil
-      if (messages.length > 0) {
-        console.log(`📋 Message IDs:`, messages.map(m => m.id).join(', '));
-        console.log(`📅 Timestamps:`, messages.map(m => m.created_at).join(', '));
-      }
-      
-      return messages;
-      
-    } catch (error) {
-      console.error('Error in getChatHistory:', error);
-      return [];
     }
-  }
-
-  // ✅ TAMBAHKAN: Get ALL messages tanpa limit untuk debugging
-  async getAllChatMessages(userId1, userId2) {
-    if (!userId1 || !userId2) return [];
     
+    return messages;
+    
+  } catch (error) {
+    console.error('Error in getChatHistory:', error);
+    return [];
+  }
+}
+
+
+  async saveVoiceMessage({
+    id,
+    text,
+    audioPath,
+    audioBase64,
+    duration,
+    senderId,
+    senderName,
+    receiverId,
+    receiverName,
+    isOwn,
+    status,
+    timestamp,
+    createdAt
+  }) {
     try {
       const query = `
-        SELECT * FROM messages 
-        WHERE (sender_id = ? AND receiver_id = ?) 
-           OR (sender_id = ? AND receiver_id = ?)
-        ORDER BY datetime(created_at) ASC
+        INSERT INTO messages (
+          id, text, sender_id, sender_name, receiver_id, receiver_name, 
+          is_own, status, timestamp, created_at, type, audio_path, audio_base64, duration
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
-      const result = await executeQuery(query, [userId1, userId2, userId2, userId1]);
+      const params = [
+        id,
+        text || '🎤 Voice Message',
+        senderId,
+        senderName || '',
+        receiverId,
+        receiverName || '',
+        isOwn ? 1 : 0,
+        status || 'sent',
+        timestamp,
+        createdAt || new Date().toISOString(),
+        'voice',
+        audioPath || '',
+        audioBase64 || '',
+        duration || '00:00'
+      ];
       
-      const messages = [];
-      const rowsLength = result.rows.length || 0;
-      
-      for (let i = 0; i < rowsLength; i++) {
-        const row = result.rows.item(i);
-        if (row) {
-          messages.push(row);
-        }
-      }
-      
-      console.log(`📊 TOTAL messages in DB for this chat: ${messages.length}`);
-      
-      // Debug: Tampilkan semua pesan
-      messages.forEach((msg, idx) => {
-        console.log(`  ${idx+1}. ID: ${msg.id}, Sender: ${msg.sender_id}, Created: ${msg.created_at}`);
-      });
-      
-      return messages;
+      await executeQuery(query, params);
+      console.log('✅ Voice message saved to database');
+      return true;
       
     } catch (error) {
-      console.error('Error getting all messages:', error);
-      return [];
+      console.error('❌ Failed to save voice message:', error);
+      throw error;
     }
   }
 
-  // ✅ TAMBAHKAN: Fix inconsistent data
+  // ✅ FIX INCONSISTENT DATA (HANYA SATU, jangan static)
   async fixInconsistentData() {
     try {
       console.log('🔧 Fixing inconsistent data...');
       
-      // Update created_at yang NULL atau invalid
       await executeQuery(`
         UPDATE messages 
         SET created_at = datetime('now') 
         WHERE created_at IS NULL OR created_at = ''
       `);
       
-      // Update timestamp yang NULL
       await executeQuery(`
         UPDATE messages 
         SET timestamp = datetime(created_at, 'localtime')
@@ -165,35 +181,83 @@ class MessageRepository {
       `);
       
       console.log('✅ Data inconsistency fixed');
-      
     } catch (error) {
       console.error('Error fixing data:', error);
     }
   }
 
-  // ✅ TAMBAHKAN: Get messages dengan raw query untuk debug
+  // ✅ GET ALL messages tanpa limit
+ async getAllChatMessages(userId1, userId2) {
+  if (!userId1 || !userId2) return [];
+  
+  try {
+    // ✅ Ambil SEMUA kolom termasuk untuk voice message
+    const query = `
+      SELECT 
+        id, text, sender_id, sender_name, receiver_id, receiver_name,
+        is_own, status, timestamp, created_at, type, 
+        audio_path, audio_base64, duration
+      FROM messages 
+      WHERE (sender_id = ? AND receiver_id = ?) 
+         OR (sender_id = ? AND receiver_id = ?)
+      ORDER BY datetime(created_at) ASC
+    `;
+    
+    const result = await executeQuery(query, [userId1, userId2, userId2, userId1]);
+    
+    const messages = [];
+    const rowsLength = result.rows.length || 0;
+    
+    for (let i = 0; i < rowsLength; i++) {
+      const row = result.rows.item(i);
+      if (row) {
+        messages.push({
+          id: row.id,
+          text: row.text,
+          sender_id: row.sender_id,
+          sender_name: row.sender_name,
+          receiver_id: row.receiver_id,
+          receiver_name: row.receiver_name,
+          is_own: row.is_own,
+          status: row.status,
+          timestamp: row.timestamp,
+          created_at: row.created_at,
+          type: row.type || 'text',
+          audio_path: row.audio_path,
+          audio_base64: row.audio_base64,
+          duration: row.duration,
+        });
+      }
+    }
+    
+    console.log(`📊 Loaded ${messages.length} messages from DB`);
+    
+    // Debug: Tampilkan voice messages
+    const voiceMessages = messages.filter(m => m.type === 'voice');
+    if (voiceMessages.length > 0) {
+      console.log(`🎤 Found ${voiceMessages.length} voice messages`);
+      voiceMessages.forEach(vm => {
+        console.log(`  - ID: ${vm.id}, Duration: ${vm.duration}, HasBase64: ${!!vm.audio_base64}`);
+      });
+    }
+    
+    return messages;
+    
+  } catch (error) {
+    console.error('Error getting all messages:', error);
+    return [];
+  }
+}
+
+
+  // ✅ DEBUG QUERY
   async debugQuery(userId1, userId2) {
     try {
-      // Cek semua pesan tanpa filter
       const allQuery = `SELECT COUNT(*) as total FROM messages`;
       const allResult = await executeQuery(allQuery, []);
       const totalAll = allResult.rows.item(0).total;
       console.log(`📊 Total semua pesan di DB: ${totalAll}`);
       
-      // Cek pesan berdasarkan sender/receiver
-      const senderQuery = `
-        SELECT COUNT(*) as count, sender_id, receiver_id 
-        FROM messages 
-        GROUP BY sender_id, receiver_id
-      `;
-      const senderResult = await executeQuery(senderQuery, []);
-      console.log(`📊 Group by sender/receiver:`);
-      for (let i = 0; i < senderResult.rows.length; i++) {
-        const row = senderResult.rows.item(i);
-        console.log(`  ${row.sender_id} -> ${row.receiver_id}: ${row.count} messages`);
-      }
-      
-      // Cek pesan spesifik untuk chat ini
       const chatQuery = `
         SELECT COUNT(*) as count 
         FROM messages 
@@ -204,10 +268,7 @@ class MessageRepository {
       const chatCount = chatResult.rows.item(0).count;
       console.log(`📊 Pesan untuk chat ${userId1} <-> ${userId2}: ${chatCount} messages`);
       
-      return {
-        totalAll,
-        chatCount
-      };
+      return { totalAll, chatCount };
       
     } catch (error) {
       console.error('Debug error:', error);
@@ -234,21 +295,11 @@ class MessageRepository {
       ]);
       
       const messages = [];
-      const rowsLength = result.rows.length || 0;
-      
-      for (let i = 0; i < rowsLength; i++) {
-        const row = result.rows.item(i);
-        if (row) {
-          messages.push(row);
-        }
-      }
-      
-      if (messages.length > 0) {
-        console.log(`🆕 Found ${messages.length} new messages after ${afterTimestamp}`);
+      for (let i = 0; i < result.rows.length; i++) {
+        messages.push(result.rows.item(i));
       }
       
       return messages;
-      
     } catch (error) {
       console.error('Error getting new messages:', error);
       return [];
@@ -269,12 +320,9 @@ class MessageRepository {
       const result = await executeQuery(query, [userId1, userId2, userId2, userId1]);
       
       if (result && result.rows && result.rows.length > 0) {
-        const row = result.rows.item(0);
-        return row.last_timestamp;
+        return result.rows.item(0).last_timestamp;
       }
-      
       return null;
-      
     } catch (error) {
       console.error('Error getting last timestamp:', error);
       return null;
@@ -294,8 +342,7 @@ class MessageRepository {
         return false;
       }
       
-      const row = result.rows.item(0);
-      return row && row.count > 0;
+      return result.rows.item(0).count > 0;
     } catch (error) {
       console.error('Error checking message exists:', error);
       return false;
@@ -330,8 +377,7 @@ class MessageRepository {
     try {
       const result = await executeQuery('SELECT COUNT(*) as count FROM messages');
       if (result && result.rows && result.rows.length > 0) {
-        const row = result.rows.item(0);
-        return row.count;
+        return result.rows.item(0).count;
       }
       return 0;
     } catch (error) {
@@ -339,6 +385,96 @@ class MessageRepository {
       return 0;
     }
   }
+
+  async getUnreadCount(currentUserId, otherUserId) {
+    if (!currentUserId || !otherUserId) return 0;
+    
+    try {
+      const query = `SELECT COUNT(*) as count FROM messages WHERE sender_id = ? AND receiver_id = ?`;
+      const result = await executeQuery(query, [otherUserId, currentUserId]);
+      
+      if (result && result.rows && result.rows.length > 0) {
+        return result.rows.item(0).count || 0;
+      }
+      return 0;
+    } catch (error) {
+      console.error('Error getting unread count:', error);
+      return 0;
+    }
+  }
+
+  async getAllChatUsers(currentUserId) {
+    if (!currentUserId) return [];
+    
+    try {
+      const query = `
+        SELECT DISTINCT 
+          CASE 
+            WHEN sender_id = ? THEN receiver_id
+            ELSE sender_id
+          END as user_id
+        FROM messages
+        WHERE sender_id = ? OR receiver_id = ?
+      `;
+      
+      const result = await executeQuery(query, [currentUserId, currentUserId, currentUserId]);
+      
+      const users = [];
+      for (let i = 0; i < result.rows.length; i++) {
+        const row = result.rows.item(i);
+        if (row.user_id) {
+          users.push(row.user_id);
+        }
+      }
+      
+      console.log(`📱 Found ${users.length} chat users`);
+      return users;
+    } catch (error) {
+      console.error('Error getting chat users:', error);
+      return [];
+    }
+  }
+
+  async getAllLastMessages(currentUserId) {
+    if (!currentUserId) return [];
+    
+    try {
+      const chatUsers = await this.getAllChatUsers(currentUserId);
+      const lastMessages = [];
+      
+      for (const otherUserId of chatUsers) {
+        const history = await this.getChatHistory(currentUserId, otherUserId, 1, 0);
+        const unreadCount = await this.getUnreadCount(currentUserId, otherUserId);
+        
+        if (history && history.length > 0) {
+          const lastMsg = history[history.length - 1];
+          lastMessages.push({
+            userId: otherUserId,
+            lastMessage: lastMsg.text,
+            lastMessageTime: lastMsg.created_at,
+            unreadCount: unreadCount,
+            messageId: lastMsg.id,
+            status: lastMsg.status,
+          });
+        }
+      }
+      
+      lastMessages.sort((a, b) => {
+        const timeA = new Date(a.lastMessageTime || 0);
+        const timeB = new Date(b.lastMessageTime || 0);
+        return timeB - timeA;
+      });
+      
+      console.log(`📱 Retrieved last messages for ${lastMessages.length} chats`);
+      return lastMessages;
+      
+    } catch (error) {
+      console.error('Error getting all last messages:', error);
+      return [];
+    }
+  }
 }
 
-export default new MessageRepository();
+// ✅ Export sebagai INSTANCE (bukan class)
+const messageRepository = new MessageRepository();
+export default messageRepository;

@@ -5,7 +5,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 const Footer = ({ navigation, active }) => {
   const menus = [
     { name: 'chat', label: 'Chats', icon: 'chatbubble-outline', activeIcon: 'chatbubbles-outline', route: 'RoomList' },
-    { name: 'match', label: 'Match', icon: 'people-outline', activeIcon: 'people-outline', route: 'Match' },
+    { name: 'match', label: 'Match', icon: 'people-outline', activeIcon: 'people-outline', route: 'LikedYou' },
     { name: 'home', label: 'Explore', icon: 'planet', activeIcon: 'planet-outline', route: 'Home' },
     { name: 'update', label: 'updates', icon: 'footsteps-outline', activeIcon: 'footsteps-outline', route: 'Update' },
     { name: 'profile', label: 'Profile', icon: 'person-outline', activeIcon: 'person-outline', route: 'Profile' },

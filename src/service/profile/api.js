@@ -39,10 +39,19 @@ const refreshToken = async () => {
 };
 
 // Upload profile photo
+// Fix the uploadProfilePhoto function signature and implementation
 export const uploadProfilePhoto = async (userId, imageUri, imageType, imageName) => {
   try {
+    // Add validation
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    
     const token = await getAccessToken();
-    if (!userId) throw new Error('User ID is missing');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    
     if (!imageUri) throw new Error('Image URI is missing');
 
     const formData = new FormData();
@@ -53,7 +62,7 @@ export const uploadProfilePhoto = async (userId, imageUri, imageType, imageName)
     });
 
     const uploadUrl = `${API_UPLOAD_PROFILE_PHOTO_URL}/${userId}`;
-
+console.info(uploadUrl)
     const response = await axios.put(uploadUrl, formData, {
       headers: {
         Authorization: `Bearer ${token}`,

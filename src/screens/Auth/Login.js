@@ -43,10 +43,10 @@ const Login = ({ navigation }) => {
 
   // Quotes
   const quotes = [
-    { text: "Connect with the world around you", author: "MiSee" },
-    { text: "Where conversations come to life", author: "MiSee" },
-    { text: "Your story begins here", author: "MiSee" },
-    { text: "Share moments that matter", author: "MiSee" },
+    { text: "Connect with the world around you", author: "Yuhuu!" },
+    { text: "Where conversations come to life", author: "Yuhuu!" },
+    { text: "Your story begins here", author: "Yuhuu!" },
+    { text: "Share moments that matter", author: "Yuhuu!" },
   ];
   const [currentQuote, setCurrentQuote] = useState(0);
 
@@ -187,7 +187,7 @@ const Login = ({ navigation }) => {
         const { access_token, refresh_token, whatsapp } = json.data;
 
         // Save tokens
-        await AsyncStorage.setItem('access_token', token);
+        await AsyncStorage.setItem('access_token', access_token);
         await AsyncStorage.setItem('refresh_token', refresh_token);
 
         if (!whatsapp || whatsapp === "/bvTmYgHVZjVt85fktdsXA==") {
@@ -286,7 +286,7 @@ const Login = ({ navigation }) => {
                 </LinearGradient>
               </View>
               
-              <Text style={styles.titleText}>MiSee</Text>
+              <Text style={styles.titleText}>Yuhuu!</Text>
               
               <Animated.Text style={styles.quoteText}>
                 {quotes[currentQuote].text}
@@ -341,7 +341,7 @@ const Login = ({ navigation }) => {
                 </Animated.View>
 
                 <View style={styles.signupContainer}>
-                  <Text style={styles.signupText}>New to MiSee? </Text>
+                  <Text style={styles.signupText}>New to Yuhuu!? </Text>
                   <TouchableOpacity onPress={() => navigation.navigate('SignUp')} activeOpacity={0.6}>
                     <Text style={styles.signupLink}>Create account</Text>
                   </TouchableOpacity>

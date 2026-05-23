@@ -25,7 +25,7 @@ const HelpSupport = ({ navigation }) => {
 
   const handleShareApp = () => {
     Share.share({
-      message: 'Try MiSee app for easy and secure chatting! Download at: https://miSee.com/download',
+      message: 'Try Yuhuu! app for easy and secure chatting! Download at: https://miSee.com/download',
       title: 'Share App',
     });
   };
@@ -133,9 +133,8 @@ const HelpSupport = ({ navigation }) => {
 
         {/* Version & Credits */}
         <View style={styles.infoContainer}>
-          <Text style={styles.versionText}>App Version: 1.0.0</Text>
-          <Text style={styles.copyrightText}>© 2025 PT MiSee Teknologi</Text>
-          <Text style={styles.copyrightText}>support@miSee.com | +62 812-3456-7890</Text>
+          <Text style={styles.versionText}>App Version: 2.0.5</Text>
+          <Text style={styles.copyrightText}>© Yuhuu Platforms</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -12,13 +12,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  RefreshControl,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Footer from '../screens/components/Footer';
+import { fetchPosts, createPost, BASE_URL } from '../service/update/api';
+import * as ImagePicker from 'react-native-image-picker'; // Install: npm install react-native-image-picker
+import { launchImageLibrary } from 'react-native-image-picker';
 
-const STORAGE_KEY = '@feed_posts';
 const CURRENT_USER = {
   id: '1',
   name: 'You',
@@ -31,90 +35,118 @@ const Update = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [postText, setPostText] = useState('');
   const [posting, setPosting] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [showImagePickerModal, setShowImagePickerModal] = useState(false);
 
-  // Load posts from storage or initialize with mock data
   useEffect(() => {
     loadPosts();
   }, []);
 
   const loadPosts = async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setPosts(JSON.parse(stored));
-      } else {
-        // Mock data for demo
-        const mockPosts = [
-          {
-            id: '2',
-            userId: '2',
-            userName: 'Maharanni Nugraha',
-            userAvatar: 'https://ui-avatars.com/api/?background=4CAF50&color=fff&name=MN',
-            content: 'Selamat pagi semua! Semoga harimu menyenangkan 🌞',
-            image: null,
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-            likes: 5,
-            comments: 2,
-            liked: false,
-          },
-          {
-            id: '1',
-            userId: '3',
-            userName: 'Asep Rayana',
-            userAvatar: 'https://ui-avatars.com/api/?background=2196F3&color=fff&name=AR',
-            content: 'Just finished a great project! 🚀',
-            image: 'https://picsum.photos/400/300',
-            timestamp: new Date(Date.now() - 86400000).toISOString(),
-            likes: 12,
-            comments: 3,
-            liked: true,
-          },
-        ];
-        setPosts(mockPosts);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockPosts));
+      setLoading(true);
+      
+      const result = await fetchPosts(navigation);
+
+      if (!result) {
+        return;
       }
+
+      let postsData = [];
+      if (result.data && Array.isArray(result.data)) {
+        postsData = result.data;
+      }
+
+      const mappedPosts = postsData
+        .filter(item => item.id)
+        .map(item => ({
+          id: item.id,
+          userId: item.user_id,
+          userName: item.created_by || `User_${item.user_id?.substring(0, 6)}`,
+          userAvatar: `https://ui-avatars.com/api/?background=075E54&color=fff&name=${encodeURIComponent(item.created_by || 'User')}`,
+          content: item.caption || 'No caption',
+          image: item.image_url && item.image_url !== '' 
+            ? `http://103.150.227.223:2349/picture${item.image_url}` 
+            : null,
+          timestamp: new Date().toISOString(),
+          likes: 0,
+          comments: 0,
+          liked: false,
+        }));
+
+      setPosts(mappedPosts);
     } catch (error) {
       console.error('Load posts error:', error);
+      Alert.alert('Error', 'Failed to load posts');
     } finally {
       setLoading(false);
     }
   };
 
-  const savePosts = async (newPosts) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newPosts));
-      setPosts(newPosts);
-    } catch (error) {
-      console.error('Save posts error:', error);
-    }
+  const selectImage = () => {
+    const options = {
+      mediaType: 'photo',
+      includeBase64: false,
+      maxHeight: 2000,
+      maxWidth: 2000,
+      quality: 0.8,
+    };
+
+    launchImageLibrary(options, (response) => {
+      if (response.didCancel) {
+        console.log('User cancelled image picker');
+      } else if (response.error) {
+        console.log('ImagePicker Error: ', response.error);
+        Alert.alert('Error', 'Failed to select image');
+      } else if (response.assets && response.assets[0]) {
+        const asset = response.assets[0];
+        setSelectedImage({
+          uri: asset.uri,
+          type: asset.type,
+          fileName: asset.fileName,
+        });
+        setShowImagePickerModal(false);
+      }
+    });
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
   };
 
   const handlePost = async () => {
-    if (!postText.trim()) {
-      Alert.alert('Error', 'Please enter something to post.');
+    if (!postText.trim() && !selectedImage) {
+      Alert.alert('Error', 'Please enter something or select an image to post');
       return;
     }
 
     setPosting(true);
-    const newPost = {
-      id: Date.now().toString(),
-      userId: CURRENT_USER.id,
-      userName: CURRENT_USER.name,
-      userAvatar: CURRENT_USER.avatar,
-      content: postText.trim(),
-      image: null,
-      timestamp: new Date().toISOString(),
-      likes: 0,
-      comments: 0,
-      liked: false,
-    };
-    const updatedPosts = [newPost, ...posts];
-    await savePosts(updatedPosts);
-    setPostText('');
-    setPosting(false);
+
+    try {
+      // Upload ke server
+      const response = await createPost(postText.trim(), selectedImage);
+      
+      if (response && response.status === 'success') {
+        // Reset form
+        setPostText('');
+        setSelectedImage(null);
+        
+        // Reload posts
+        await loadPosts();
+        
+        Alert.alert('Success', 'Post created successfully!');
+      } else {
+        Alert.alert('Error', response?.message || 'Failed to create post');
+      }
+    } catch (error) {
+      console.error('Create post error:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to create post');
+    } finally {
+      setPosting(false);
+    }
   };
 
-  const handleLike = async (postId) => {
+  const handleLike = (postId) => {
     const updatedPosts = posts.map(post => {
       if (post.id === postId) {
         const newLiked = !post.liked;
@@ -126,7 +158,7 @@ const Update = ({ navigation }) => {
       }
       return post;
     });
-    await savePosts(updatedPosts);
+    setPosts(updatedPosts);
   };
 
   const handleComment = (postId) => {
@@ -141,10 +173,17 @@ const Update = ({ navigation }) => {
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
+    
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
     return `${Math.floor(diff / 86400000)}d`;
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadPosts();
+    setRefreshing(false);
   };
 
   const renderPost = ({ item }) => (
@@ -159,14 +198,18 @@ const Update = ({ navigation }) => {
           <Icon name="ellipsis-horizontal" size={20} color="#999" />
         </TouchableOpacity>
       </View>
+
       <Text style={styles.postContent}>{item.content}</Text>
+
       {item.image && (
         <Image source={{ uri: item.image }} style={styles.postImage} resizeMode="cover" />
       )}
+
       <View style={styles.postStats}>
         <Text style={styles.statText}>{item.likes} likes</Text>
         <Text style={styles.statText}>{item.comments} comments</Text>
       </View>
+
       <View style={styles.postActions}>
         <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(item.id)}>
           <Icon
@@ -176,10 +219,12 @@ const Update = ({ navigation }) => {
           />
           <Text style={[styles.actionText, item.liked && styles.actionTextActive]}>Like</Text>
         </TouchableOpacity>
+
         <TouchableOpacity style={styles.actionButton} onPress={() => handleComment(item.id)}>
           <Icon name="chatbubble-outline" size={22} color="#666" />
           <Text style={styles.actionText}>Comment</Text>
         </TouchableOpacity>
+
         <TouchableOpacity style={styles.actionButton} onPress={() => handleShare(item.id)}>
           <Icon name="share-outline" size={22} color="#666" />
           <Text style={styles.actionText}>Share</Text>
@@ -196,11 +241,34 @@ const Update = ({ navigation }) => {
     </View>
   );
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadPosts();
-    setRefreshing(false);
-  };
+  const renderImagePickerModal = () => (
+    <Modal
+      visible={showImagePickerModal}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowImagePickerModal(false)}
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay} 
+        activeOpacity={1} 
+        onPress={() => setShowImagePickerModal(false)}
+      >
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Select Image</Text>
+          <TouchableOpacity style={styles.modalOption} onPress={selectImage}>
+            <Icon name="images-outline" size={24} color="#075E54" />
+            <Text style={styles.modalOptionText}>Choose from Gallery</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.modalOption, styles.modalCancel]} 
+            onPress={() => setShowImagePickerModal(false)}
+          >
+            <Text style={styles.modalCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   if (loading) {
     return (
@@ -214,7 +282,7 @@ const Update = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Updates</Text>
         <TouchableOpacity>
@@ -223,7 +291,7 @@ const Update = ({ navigation }) => {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <FlatList
@@ -233,35 +301,55 @@ const Update = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.feedContainer}
           ListEmptyComponent={renderEmpty}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         />
 
         <View style={styles.inputContainer}>
           <Image source={{ uri: CURRENT_USER.avatar }} style={styles.inputAvatar} />
-          <TextInput
-            style={styles.input}
-            placeholder="What's on your mind?"
-            placeholderTextColor="#999"
-            value={postText}
-            onChangeText={setPostText}
-            multiline
-          />
-          <TouchableOpacity
-            style={[styles.postButton, !postText.trim() && styles.postButtonDisabled]}
-            onPress={handlePost}
-            disabled={posting || !postText.trim()}
-          >
-            {posting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Icon name="send" size={20} color="#fff" />
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={styles.input}
+              placeholder="What's on your mind?"
+              placeholderTextColor="#999"
+              value={postText}
+              onChangeText={setPostText}
+              multiline
+            />
+            {selectedImage && (
+              <View style={styles.selectedImageContainer}>
+                <Image source={{ uri: selectedImage.uri }} style={styles.selectedImagePreview} />
+                <TouchableOpacity style={styles.removeImageButton} onPress={removeImage}>
+                  <Icon name="close-circle" size={24} color="#f44336" />
+                </TouchableOpacity>
+              </View>
             )}
-          </TouchableOpacity>
+          </View>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity 
+              style={styles.imagePickerButton} 
+              onPress={() => setShowImagePickerModal(true)}
+            >
+              <Icon name="image-outline" size={24} color="#075E54" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.postButton, (!postText.trim() && !selectedImage) && styles.postButtonDisabled]}
+              onPress={handlePost}
+              disabled={posting || (!postText.trim() && !selectedImage)}
+            >
+              {posting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Icon name="send" size={20} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
 
       <Footer navigation={navigation} active="update" />
+      {renderImagePickerModal()}
     </SafeAreaView>
   );
 };
@@ -379,7 +467,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#fff',
@@ -392,14 +480,45 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 12,
   },
-  input: {
+  inputWrapper: {
     flex: 1,
+  },
+  input: {
     backgroundColor: '#f0f0f0',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,
     fontSize: 16,
     maxHeight: 100,
+  },
+  selectedImageContainer: {
+    marginTop: 8,
+    position: 'relative',
+  },
+  selectedImagePreview: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  imagePickerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
   },
   postButton: {
     backgroundColor: '#075E54',
@@ -408,7 +527,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
   },
   postButtonDisabled: {
     backgroundColor: '#ccc',
@@ -428,6 +546,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#bbb',
     marginTop: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#111',
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    marginLeft: 12,
+    color: '#111',
+  },
+  modalCancel: {
+    justifyContent: 'center',
+    marginTop: 10,
+    borderBottomWidth: 0,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#f44336',
+    textAlign: 'center',
   },
 });
 

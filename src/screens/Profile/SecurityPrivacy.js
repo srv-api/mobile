@@ -76,10 +76,6 @@ const SecurityPrivacy = ({ navigation }) => {
     Alert.alert('Change Password', 'This feature will be available soon.');
   };
 
-  const handleManageDevices = () => {
-    Alert.alert('Manage Devices', 'You will be able to see and remove connected devices soon.');
-  };
-
   const handleBlockedUsers = () => {
     Alert.alert('Blocked Users', 'Manage your blocked list will be available soon.');
   };
@@ -128,10 +124,10 @@ const SecurityPrivacy = ({ navigation }) => {
             />
           </View>
 
-          <TouchableOpacity style={styles.menuItem} onPress={handleManageDevices}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Debug')}>
             <View style={styles.menuLeft}>
               <Icon name="phone-portrait-outline" size={24} color="#075E54" />
-              <Text style={styles.menuText}>Manage Devices</Text>
+              <Text style={styles.menuText}>Chat</Text>
             </View>
             <Icon name="chevron-forward-outline" size={20} color="#999" />
           </TouchableOpacity>

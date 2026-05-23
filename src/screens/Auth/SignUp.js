@@ -274,8 +274,8 @@ const SignUp = ({ navigation }) => {
         parseInt(birthDate.year)
       );
       
-      if (age < 13) {
-        Alert.alert('', 'You must be at least 13 years old to join MiSee');
+      if (age < 18) {
+        Alert.alert('', 'You must be at least 18years old to join Yuhuu!');
         return;
       }
       

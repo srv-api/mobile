@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Animated,
   PanResponder,
+  Modal ,
   Dimensions,
   Image,
   StatusBar,
@@ -14,16 +15,15 @@ import {
   Easing,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import Entypo from 'react-native-vector-icons/Entypo';
 import LinearGradient from 'react-native-linear-gradient';
-import Footer from '../components/Footer.js';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Geolocation from 'react-native-geolocation-service';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-
+import SayHiModal from './SayHiModal'; // Sesuaikan path
 import { API_CONFIG } from '../../service/explore/config.js';
-import { fetchExploreData, updateUserLocation, getAuthToken, sendLike } from '../../service/explore/api.js';
+import { fetchExploreData, updateUserLocation,createBoost, getAuthToken, sendLike } from '../../service/explore/api.js';
 import { formatUserData } from '../../service/explore/utils.js';
+import FooterHome from '../components/FooterHome.js';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -32,12 +32,22 @@ const HomeScreen = ({ navigation }) => {
   const [position] = useState(new Animated.ValueXY());
   const [users, setUsers] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isLoggedInPremium, setIsLoggedInPremium] = useState(false);
+  const [userIsBoosted, setUserIsBoosted] = useState(false);
+  const [userIsStarLike, setUserIsStarLike] = useState(false);
+  const [userIsSee, setUserIsSee] = useState(false);
+  const [remainingSwipe, setRemainingSwipe] = useState(0);
+  const [showSwipeLimitModal, setShowSwipeLimitModal] = useState(false);
+  const [showSayHiModal, setShowSayHiModal] = useState(false);
+  const [selectedUserForHi, setSelectedUserForHi] = useState(null);
+
   const [isTreeMenuVisible, setIsTreeMenuVisible] = useState(false);
   const [showStars, setShowStars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(null);
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
-  
+  const [activeTab, setActiveTab] = useState('for you');
+
   // State untuk animasi boost petir
   const [isBoosting, setIsBoosting] = useState(false);
   const [boostProgress, setBoostProgress] = useState(0);
@@ -100,6 +110,18 @@ const HomeScreen = ({ navigation }) => {
     };
   }, []);
 
+  const isPremiumUser = () => {
+    return isLoggedInPremium === true;
+  };
+
+  const isBoostedUser = () => {
+    return userIsBoosted === true;
+  };
+
+   const isStarLikeUser = () => {
+    return userIsStarLike === true;
+  };
+
   const initHomeScreen = async () => {
     setLoading(true);
     const location = await getLocation();
@@ -118,7 +140,7 @@ const HomeScreen = ({ navigation }) => {
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         {
           title: 'Izin Lokasi',
-          message: 'MiSee butuh akses lokasi untuk menemukan orang di sekitar kamu',
+          message: 'Yuhuu! butuh akses lokasi untuk menemukan orang di sekitar kamu',
           buttonNeutral: 'Nanti',
           buttonNegative: 'Tolak',
           buttonPositive: 'Izinkan',
@@ -171,9 +193,16 @@ const HomeScreen = ({ navigation }) => {
   const loadExploreData = async () => {
     try {
       const usersData = await fetchExploreData();
+
+      setIsLoggedInPremium(usersData.user_is_premium || false);
+      setUserIsBoosted(usersData.user_is_boosted || false);
+      setUserIsStarLike(usersData.user_is_star_like || false);
+      setUserIsSee(usersData.user_is_see || false);
+      setRemainingSwipe(usersData.remaining_swipe || 0);
+
       
-      if (usersData && usersData.length > 0) {
-        const formattedUsers = usersData.map(user => formatUserData(user, API_CONFIG.PICT_URL));
+      if (usersData.users && usersData.users.length > 0) {
+        const formattedUsers = usersData.users.map(user => formatUserData(user, API_CONFIG.PICT_URL));
         setUsers(formattedUsers);
       } else {
         setUsers([]);
@@ -206,6 +235,46 @@ const HomeScreen = ({ navigation }) => {
     }).start(() => setHasSwipedRight(false));
   };
 
+  // ==================== MODAL COMPONENT ====================
+const SwipeLimitModal = ({ visible, onClose, onUpgrade }) => (
+  <Modal visible={visible} transparent animationType="fade">
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContainer}>
+        <Icon name="timer-outline" size={60} color="#FF3B6F" />
+        <Text style={styles.modalTitle}>Daily Swipe Limit Reached! 😢</Text>
+        <Text style={styles.modalDesc}>
+          You've used all your daily swipes! Come back tomorrow.
+        </Text>
+        
+        <View style={styles.features}>
+          <Text style={styles.featureText}>✨ Unlimited Swipes</Text>
+          <Text style={styles.featureText}>⭐ Super Likes (Star)</Text>
+          <Text style={styles.featureText}>⚡ Profile Boost</Text>
+          <Text style={styles.featureText}>👁️ See Who Likes You</Text>
+        </View>
+        
+        <TouchableOpacity style={styles.upgradeBtn} onPress={onUpgrade}>
+          <LinearGradient
+            colors={['#FF3B6F', '#FF6B6B']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.upgradeGradient}
+          >
+            <Text style={styles.upgradeBtnText}>🔥 Upgrade to Premium</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        
+        <TouchableOpacity onPress={onClose}>
+          <Text style={styles.laterText}>Maybe Later</Text>
+        </TouchableOpacity>
+        
+        <Text style={styles.resetInfo}>Swipes reset at midnight 🕛</Text>
+      </View>
+    </View>
+  </Modal>
+);
+// ==================== END MODAL ====================
+
   const handleSwipeComplete = (direction) => {
     if (direction === 'right') {
       handleHeartIconPress();
@@ -214,7 +283,14 @@ const HomeScreen = ({ navigation }) => {
     position.setValue({ x: 0, y: 0 });
   };
 
-  const handleHeartIconPress = async (isSuperLike = false) => {
+
+const handleHeartIconPress = async (isSuperLike = false) => {
+  // Cek swipe limit
+  if (remainingSwipe <= 1 && !isPremiumUser()) {
+    setShowSwipeLimitModal(true);
+    return;
+  }
+  
   const likedUser = users[currentIndex];
   if (!likedUser) {
     console.log('❌ No user to like');
@@ -225,6 +301,11 @@ const HomeScreen = ({ navigation }) => {
   
   try {
     const response = await sendLike(likedUser.id, isSuperLike);
+    
+    // Update remaining swipe
+    if (response.data?.remaining_swipe !== undefined) {
+      setRemainingSwipe(response.data.remaining_swipe);
+    }
     
     if (response.data?.isMatch) {
       Alert.alert(
@@ -238,8 +319,6 @@ const HomeScreen = ({ navigation }) => {
           { text: 'Keep Swiping', style: 'cancel' }
         ]
       );
-    } else {
-      console.log('✅ Like sent successfully');
     }
     
     return response;
@@ -247,17 +326,9 @@ const HomeScreen = ({ navigation }) => {
     console.error('Error sending like:', error);
     
     if (error.response?.data?.message === 'daily swipe limit exceeded') {
-      Alert.alert(
-        'Swipe Limit Exceeded',
-        'You have used all your daily swipes. Come back tomorrow!',
-        [{ text: 'OK' }]
-      );
+      setShowSwipeLimitModal(true);
     } else {
-      Alert.alert(
-        'Error',
-        error.response?.data?.message || 'Failed to send like. Please try again.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Error', error.response?.data?.message || 'Failed to send like.');
     }
     
     throw error;
@@ -265,14 +336,14 @@ const HomeScreen = ({ navigation }) => {
 };
 
   // Fungsi untuk animasi boost petir dengan efek air mengisi
-  const handleBoostPress = () => {
-    if (isBoosting) {
-      cancelBoost();
-      return;
-    }
+  // const handleBoostPress = () => {
+  //   if (isBoosting) {
+  //     cancelBoost();
+  //     return;
+  //   }
     
-    startBoost();
-  };
+  //   startBoost();
+  // };
 
   const startBoost = () => {
     setIsBoosting(true);
@@ -311,6 +382,21 @@ const HomeScreen = ({ navigation }) => {
       }
     }, interval);
   };
+
+  const handleSendHi = async () => {
+  if (!selectedUserForHi) return;
+  
+  // Implementasi send hi ke API
+  console.log('Sending hi to:', selectedUserForHi.full_name);
+  
+  // Tutup modal
+  setShowSayHiModal(false);
+  setSelectedUserForHi(null);
+  
+  // Alert sukses
+  Alert.alert('Hi Sent!', `You've sent a wave to ${selectedUserForHi.full_name}!`);
+};
+
   
   const cancelBoost = () => {
     if (boostTimerRef.current) {
@@ -568,7 +654,7 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const goToPreviousUser = () => {
-    if (currentUser && currentUser.is_premium === false) {
+    if (!isPremiumUser()) {
       Alert.alert(
         'Premium Feature',
         'Go back to previous profile is only available for Premium users. Upgrade now to unlock this feature!',
@@ -582,6 +668,74 @@ const HomeScreen = ({ navigation }) => {
       resetPosition();
     }
   };
+
+    const goRewind = () => {
+    if (!isPremiumUser()) {
+      Alert.alert(
+        'Premium Feature',
+        'Go back to previous profile is only available for Premium users. Upgrade now to unlock this feature!',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade Now', onPress: () => navigation.navigate('GetGold') }
+        ]
+      );
+    } else if (currentIndex > 0) {
+      setCurrentIndex((prevIndex) => prevIndex - 1);
+      resetPosition();
+    }
+  };
+
+
+const handleStar = () => {
+  if (!isStarLikeUser()) {
+    Alert.alert(
+      'Premium Feature',
+      'Star likes are only available for Premium users. Upgrade now to unlock this feature!',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Upgrade Now', onPress: () => navigation.navigate('GetStarLike') }
+      ]
+    );
+    return;
+  }
+  
+  // Jalankan animasi bintang
+  animateStarButton();
+  
+  // Kirim star like (super like)
+  const likedUser = users[currentIndex];
+  if (likedUser) {
+    handleHeartIconPress(true);
+  }
+};
+  
+const handleBoost = async () => {
+  try {
+    if (isBoosting) {
+      cancelBoost();
+      return;
+    }
+
+    startBoost();
+
+    const response = await createBoost();
+
+    console.log('BOOST RESPONSE:', response);
+
+    Alert.alert(
+      'Boost Activated ⚡',
+      'Your profile is boosted for 30 minutes!'
+    );
+
+  } catch (error) {
+    cancelBoost();
+
+    Alert.alert(
+      'Boost Failed',
+      error?.response?.data?.message || 'Failed activate boost'
+    );
+  }
+};
 
   const refreshData = async () => {
     setLoading(true);
@@ -607,12 +761,12 @@ const HomeScreen = ({ navigation }) => {
   if (currentIndex >= users.length) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <StatusBar barStyle="light-content"/>
         <View style={styles.container}>
           <View style={styles.headerContainer}>
-            <Text style={styles.logoText}>MiSee</Text>
+            <Text style={styles.logoText}>Yuhuu!</Text>
             <TouchableOpacity onPress={toggleTreeMenu}>
-              <Icon name="menu-outline" size={28} color="#333" />
+              <Icon name="menu-outline" size={28} color="#fff" />
             </TouchableOpacity>
           </View>
           <View style={styles.noMoreContainer}>
@@ -626,9 +780,16 @@ const HomeScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
           <View style={{ marginBottom: insets.bottom }}>
-            <Footer navigation={navigation} closeIconRef={closeIconRef} />
+            <FooterHome navigation={navigation} closeIconRef={closeIconRef} />
           </View>
         </View>
+        {showSwipeLimitModal && (
+  <SwipeLimitModal
+    visible={showSwipeLimitModal}
+    onClose={() => setShowSwipeLimitModal(false)}
+    onUpgrade={() => navigation.navigate('PremiumAccess')}
+  />
+)}
       </SafeAreaView>
     );
   }
@@ -637,36 +798,83 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <StatusBar barStyle="light-content" />
       <View style={styles.container}>
         <View style={styles.headerContainer}>
           <Text style={styles.logoText}>
-            Mi<Text style={styles.logoCake}>See</Text>
+          <Animated.View style={{ transform: [{ scale: boostScaleAnim }] }}>
+    <TouchableOpacity onPress={handleBoost} activeOpacity={0.8}>
+      <Animated.View
+        style={[
+          styles.headerBoostContainer,
+          isBoosting && styles.headerBoostActive,
+        ]}
+      >
+        {/* Water fill effect */}
+        <Animated.View
+          style={[
+            styles.headerWaterFill,
+            {
+              height: waterFillHeight,
+              backgroundColor: progressColor,
+            },
+          ]}
+        />
+        
+        {/* Icon flash */}
+        <Animated.View
+          style={{
+            transform: [{ rotate: boostRotate }],
+            zIndex: 2,
+          }}
+        >
+          <Icon name="flash" size={24} color={isBoosting ? "#d468ff" : "#d468ff"} />
+        </Animated.View>
+        
+        {/* Progress text */}
+        {isBoosting && (
+          <Animated.Text style={styles.headerBoostProgress}>
+            {Math.round(boostProgress * 100)}%
+          </Animated.Text>
+        )}
+      </Animated.View>
+    </TouchableOpacity>
+  </Animated.View>
           </Text>
+           <View style={styles.tabContainer}>
+    <TouchableOpacity onPress={() => setActiveTab('for you')} style={styles.tab}>
+      <Text style={[styles.tabText, activeTab === 'for you' && styles.activeTabText]}>For You</Text>
+      {activeTab === 'for you' && <View style={styles.activeIndicator} />}
+    </TouchableOpacity>
+    
+    <TouchableOpacity onPress={() => setActiveTab('nearby')} style={styles.tab}>
+      <Text style={[styles.tabText, activeTab === 'nearby' && styles.activeTabText]}>Nearby</Text>
+      {activeTab === 'nearby' && <View style={styles.activeIndicator} />}
+    </TouchableOpacity>
+    
+    <TouchableOpacity onPress={() => setActiveTab('new')} style={styles.tab}>
+      <Text style={[styles.tabText, activeTab === 'new' && styles.activeTabText]}>New</Text>
+      {activeTab === 'new' && <View style={styles.activeIndicator} />}
+    </TouchableOpacity>
+    
+  </View>
           <TouchableOpacity onPress={toggleTreeMenu}>
-            <Icon name="menu-outline" size={28} color="#333" />
+            <Icon name="options-outline" size={22} color="#d468ff" />
           </TouchableOpacity>
         </View>
 
         {isTreeMenuVisible && (
           <View style={styles.treeMenu}>
             <TouchableOpacity
-              onPress={() => navigation.navigate('Setting')}
+              onPress={() => navigation.navigate('Preferences')}
               style={styles.menuItem}
             >
               <Icon name="settings-outline" size={20} color="#333" />
-              <Text style={styles.menuText}>Settings</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Friends')}
-              style={styles.menuItem}
-            >
-              <Icon name="people-outline" size={20} color="#333" />
-              <Text style={styles.menuText}>Matches</Text>
+              <Text style={styles.menuText}>Preferences</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem}>
               <Icon name="help-circle-outline" size={20} color="#333" />
-              <Text style={styles.menuText}>Help</Text>
+              <Text style={styles.menuText}>Who Viewed Me</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -784,13 +992,12 @@ const HomeScreen = ({ navigation }) => {
         </Animated.View>
 
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.actionBtn} onPress={goToPreviousUser}>
+          <TouchableOpacity style={styles.actionBtn} onPress={goRewind}>
             <Icon name="arrow-undo-outline" size={32} color="#b899ba" />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, styles.nopeBtn]}
-            onPress={() => forceSwipe('left')}
-          >
+            onPress={() => forceSwipe('left')}          >
             <Icon name="close" size={40} color="#ff6b6b" />
           </TouchableOpacity>
           
@@ -802,7 +1009,7 @@ const HomeScreen = ({ navigation }) => {
           >
             <TouchableOpacity
               style={[styles.actionBtn, styles.starBtn]}
-              onPress={animateStarButton}
+              onPress={handleStar}
               activeOpacity={0.8}
             >
               <Animated.View
@@ -810,7 +1017,7 @@ const HomeScreen = ({ navigation }) => {
                   transform: [{ rotate: starRotate }],
                 }}
               >
-                <Icon name="star" size={32} color="#48cf91" />
+                <Icon name="star" size={24} color="#48cf91" />
               </Animated.View>
             </TouchableOpacity>
           </Animated.View>
@@ -821,16 +1028,25 @@ const HomeScreen = ({ navigation }) => {
           >
             <Icon name="heart" size={40} color="#ff4d6d" />
           </TouchableOpacity>
-          
+         <TouchableOpacity
+          style={[styles.actionBtn, styles.boostBtn]}
+          onPress={() => {
+            setSelectedUserForHi(users[currentIndex]);
+            setShowSayHiModal(true);
+          }}
+        >
+          <Entypo name="hand" size={28} color="#426ec8" />
+        </TouchableOpacity>
+
           {/* Boost Button with Water Fill Animation */}
-          <Animated.View
+          {/* <Animated.View
             style={{
               transform: [{ scale: boostScaleAnim }],
             }}
           >
             <TouchableOpacity
               style={[styles.actionBtn, styles.boostBtn, isBoosting && styles.boostBtnActive]}
-              onPress={handleBoostPress}
+              onPress={handleBoost}
               activeOpacity={0.8}
             >
               <Animated.View
@@ -850,10 +1066,11 @@ const HomeScreen = ({ navigation }) => {
                     transform: [{ rotate: boostRotate }],
                   },
                 ]}
+
               >
-                <Icon 
-                  name="flash" 
-                  size={isBoosting ? 28 : 32} 
+                <Entypo 
+                  name="hand" 
+                  size={isBoosting ? 22 : 28} 
                   color={isBoosting ? "#ffffff" : "#426ec8"} 
                 />
               </Animated.View>
@@ -878,13 +1095,32 @@ const HomeScreen = ({ navigation }) => {
                 />
               )}
             </TouchableOpacity>
-          </Animated.View>
+          </Animated.View> */}
         </View>
 
         <View style={{ marginBottom: insets.bottom }}>
-          <Footer navigation={navigation} closeIconRef={closeIconRef} />
+          <FooterHome navigation={navigation} closeIconRef={closeIconRef} />
         </View>
       </View>
+      {showSwipeLimitModal && (
+  <SwipeLimitModal
+    visible={showSwipeLimitModal}
+    onClose={() => setShowSwipeLimitModal(false)}
+    onUpgrade={() => navigation.navigate('PremiumAccess')}
+  />
+)}
+{showSayHiModal && (
+  <SayHiModal
+    visible={showSayHiModal}
+    onClose={() => {
+      setShowSayHiModal(false);
+      setSelectedUserForHi(null);
+    }}
+    onSend={handleSendHi}
+    userName={selectedUserForHi?.full_name}
+    userAvatar={selectedUserForHi?.profile_picture?.file_path}
+  />
+)}
     </SafeAreaView>
   );
 };
@@ -892,11 +1128,11 @@ const HomeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#212121',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#212121',
   },
   loadingContainer: {
     flex: 1,
@@ -915,9 +1151,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: '#212121',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#212121',
     zIndex: 10,
   },
   logoText: {
@@ -926,13 +1162,13 @@ const styles = StyleSheet.create({
     color: '#111',
   },
   logoCake: {
-    color: '#FF6B6B',
+    color: '#018a8d',
   },
   treeMenu: {
     position: 'absolute',
     top: 70,
     right: 20,
-    width: 160,
+    width: 180,
     backgroundColor: '#fff',
     borderRadius: 16,
     paddingVertical: 8,
@@ -1075,7 +1311,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   actionBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: '#212121',
     width: 55,
     height: 55,
     borderRadius: 30,
@@ -1089,30 +1325,26 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   nopeBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: '#363636',
     width: 65,
     height: 65,
     borderRadius: 35,
     borderWidth: 1,
-    borderColor: '#ff6b6b',
   },
   likeBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: '#363636',
     width: 65,
     height: 65,
     borderRadius: 35,
     borderWidth: 1,
-    borderColor: '#ff4d6d',
   },
   starBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: '#363636',
     borderWidth: 1,
-    borderColor: '#48cf91',
   },
   boostBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: '#363636',
     borderWidth: 1,
-    borderColor: '#426ec8',
     position: 'relative',
   },
   boostBtnActive: {
@@ -1122,6 +1354,121 @@ const styles = StyleSheet.create({
   boostIconContainer: {
     zIndex: 2,
   },
+  tabContainer: {
+  flexDirection: 'row',
+  gap: 20,
+},
+tab: {
+  alignItems: 'center',
+},
+tabText: {
+  fontSize: 14,
+  fontWeight: '500',
+  color: '#888',
+},
+activeTabText: {
+  color: '#d468ff',
+},
+activeIndicator: {
+  width: 20,
+  height: 2,
+  backgroundColor: '#d468ff',
+  borderRadius: 1,
+  marginTop: 4,
+},
+// Tambahkan di styles
+modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.7)',
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+modalContainer: {
+  backgroundColor: '#fff',
+  borderRadius: 24,
+  padding: 24,
+  width: screenWidth * 0.85,
+  alignItems: 'center',
+},
+modalTitle: {
+  fontSize: 20,
+  fontWeight: 'bold',
+  color: '#333',
+  marginTop: 16,
+  marginBottom: 8,
+  textAlign: 'center',
+},
+modalDesc: {
+  fontSize: 14,
+  color: '#666',
+  textAlign: 'center',
+  marginBottom: 20,
+},
+features: {
+  width: '100%',
+  marginBottom: 24,
+},
+featureText: {
+  fontSize: 14,
+  color: '#444',
+  marginVertical: 4,
+  textAlign: 'center',
+},
+upgradeBtn: {
+  width: '100%',
+  marginBottom: 12,
+  borderRadius: 30,
+  overflow: 'hidden',
+},
+upgradeGradient: {
+  paddingVertical: 14,
+  alignItems: 'center',
+},
+upgradeBtnText: {
+  color: '#fff',
+  fontWeight: 'bold',
+  fontSize: 16,
+},
+laterText: {
+  color: '#888',
+  fontSize: 14,
+  marginTop: 8,
+},
+resetInfo: {
+  color: '#aaa',
+  fontSize: 11,
+  marginTop: 16,
+},
+headerBoostContainer: {
+  position: 'relative',
+  width: 30,
+  height: 30,
+  borderRadius: 22,
+  backgroundColor: '#363636',
+  justifyContent: 'center',
+  alignItems: 'center',
+  overflow: 'hidden',
+},
+headerBoostActive: {
+  borderWidth: 2,
+  borderColor: '#ff6b6b',
+},
+headerWaterFill: {
+  position: 'absolute',
+  bottom: 0,
+  left: 0,
+  right: 0,
+  width: '100%',
+  zIndex: 1,
+},
+headerBoostProgress: {
+  position: 'absolute',
+  zIndex: 3,
+  color: '#000',
+  fontSize: 10,
+  fontWeight: 'bold',
+  bottom: 2,
+},
   waterFill: {
     position: 'absolute',
     bottom: 0,

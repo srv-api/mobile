@@ -41,6 +41,59 @@ class WebSocketService {
     this.messageHandlers.forEach(handler => handler(message));
   }
 
+// Di sendWebRTCOffer, ganti target_id menjadi receiver_id agar konsisten
+sendWebRTCOffer(callId, targetUserId, offer) {
+  if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    console.warn('WebSocket not connected');
+    return false;
+  }
+  
+  const message = {
+    type: 'webrtc_offer',
+    callId: callId,
+    sender_id: this.userId,
+    receiver_id: targetUserId,  // ← GANTI dari target_id
+    offer: offer,
+    timestamp: new Date().toISOString(),
+  };
+  
+  this.ws.send(JSON.stringify(message));
+  console.log('📞 WebRTC offer sent to:', targetUserId);
+  return true;
+}
+sendWebRTCAnswer(callId, targetUserId, answer) {
+  if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+  
+  const message = {
+    type: 'webrtc_answer',
+    callId: callId,
+    sender_id: this.userId,
+    receiver_id: targetUserId,  // ← GANTI dari target_id
+    answer: answer,
+    timestamp: new Date().toISOString(),
+  };
+  
+  this.ws.send(JSON.stringify(message));
+  console.log('📞 WebRTC answer sent to:', targetUserId);
+  return true;
+}
+
+sendWebRTCIce(callId, targetUserId, candidate) {
+  if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+  
+  const message = {
+    type: 'webrtc_ice',
+    callId: callId,
+    sender_id: this.userId,
+    receiver_id: targetUserId,  // ← GANTI dari target_id
+    candidate: candidate,
+    timestamp: new Date().toISOString(),
+  };
+  
+  this.ws.send(JSON.stringify(message));
+  return true;
+}
+
   // Konek ke WebSocket
   async connect(userId) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -70,23 +123,55 @@ class WebSocketService {
     );
   }
 
+  
+
   // Handle pesan masuk
 async handleMessage(message) {
   console.log('🌐 Global WebSocket message:', message);
   
+  // Handle WebRTC signaling
+  if (message.type === 'webrtc_offer') {
+    this.broadcastMessage({
+      type: 'webrtc_offer',
+      callId: message.callId,
+      callerId: message.sender_id,
+      targetUserId: message.receiver_id,  // ← TAMBAHKAN
+      offer: message.offer,
+    });
+    return;
+  }
+  
+  if (message.type === 'webrtc_answer') {
+    this.broadcastMessage({
+      type: 'webrtc_answer',
+      callId: message.callId,
+      answer: message.answer,
+    });
+    return;
+  }
+  
+  if (message.type === 'webrtc_ice') {
+    this.broadcastMessage({
+      type: 'webrtc_ice',
+      callId: message.callId,
+      candidate: message.candidate,
+    });
+    return;
+  }
+  
+  // Handle chat message
   if (message.type === 'chat' && message.message) {
     try {
       const messageId = message.id || Date.now().toString();
       const exists = await MessageRepository.messageExists(messageId);
       
       if (!exists) {
-        // ✅ PASTIKAN receiver_id dan sender_id terisi dengan benar
         await MessageRepository.saveMessage({
           id: messageId,
           text: message.message,
           senderId: message.sender_id,
           senderName: message.sender_name || 'User',
-          receiverId: message.receiver_id,  // ← Pastikan ini tidak kosong
+          receiverId: message.receiver_id,
           receiverName: 'Me',
           isOwn: false,
           status: 'received',
@@ -100,8 +185,38 @@ async handleMessage(message) {
     }
   }
   
+  // Handle voice message
+  if (message.type === 'voice' && message.audio_base64) {
+    try {
+      const messageId = message.id || Date.now().toString();
+      const exists = await MessageRepository.messageExists(messageId);
+      
+      if (!exists) {
+        await MessageRepository.saveVoiceMessage({
+          id: messageId,
+          text: '🎤 Voice Message',
+          audioPath: null,
+          audioBase64: message.audio_base64,
+          duration: message.duration || '00:00',
+          senderId: message.sender_id,
+          senderName: message.sender_name || 'User',
+          receiverId: this.userId,
+          receiverName: 'Me',
+          isOwn: false,
+          status: 'received',
+          timestamp: formatTimestamp(message.timestamp) || '',
+          createdAt: message.timestamp || new Date().toISOString(),
+        });
+        console.log('✅ Voice message saved to SQLite');
+      }
+    } catch (error) {
+      console.error('Failed to save voice message:', error);
+    }
+  }
+  
   this.broadcastMessage(message);
 }
+
 
   handleOpen() {
     console.log('🌐 Global WebSocket connected');
@@ -131,6 +246,44 @@ async handleMessage(message) {
       }, delay);
     }
   }
+// Di src/service/WebSocketService.js
+ sendVoiceMessage(receiverId, audioBase64, duration, senderName) {
+  console.log('🎤 sendVoiceMessage called', { receiverId, duration, senderName });
+  
+  if (!this.ws) {
+    console.warn('⚠️ WebSocket not initialized');
+    return false;
+  }
+  
+  if (this.ws.readyState !== WebSocket.OPEN) {
+    console.warn(`⚠️ WebSocket not open. State: ${this.ws.readyState}`);
+    return false;
+  }
+  
+  if (!this.userId) {
+    console.warn('⚠️ User ID not set');
+    return false;
+  }
+  
+  try {
+    const message = {
+      type: 'voice',
+      sender_id: this.userId,
+      receiver_id: receiverId,
+      audio_base64: audioBase64,
+      duration: duration,
+      sender_name: senderName || '',
+      timestamp: new Date().toISOString()
+    };
+    
+    this.ws.send(JSON.stringify(message));
+    console.log('🎤 Voice message sent via WebSocket');
+    return true;
+  } catch (error) {
+    console.error('❌ Error sending voice message:', error);
+    return false;
+  }
+}
 
   // Kirim pesan
   sendMessage(receiverId, messageText, senderName = '') {

@@ -36,7 +36,7 @@ const AccountStep = ({
         ]}>
           <TextInput
             style={styles.input}
-            placeholder="hello@MiSee.com"
+            placeholder="hello@Yuhuu!.com"
             placeholderTextColor="rgba(255,255,255,0.3)"
             value={email}
             onChangeText={setEmail}

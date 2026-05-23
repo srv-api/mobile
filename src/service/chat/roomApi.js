@@ -171,11 +171,11 @@ export const getAuthHeaders = async () => {
 // roomApi.js - tambahkan parameter searchQuery pada fetchUsers
 
 export const fetchUsers = async (pageNum = 1, limit = 20, searchQuery = '') => {
-  // Build URL dengan parameter pencarian jika ada
   let url = `${API_BASE_URL}/merchant/user/pagination?page=${pageNum}&limit=${limit}&sort=created_at desc`;
   if (searchQuery && searchQuery.trim() !== '') {
-    // Gunakan full_name.contains untuk pencarian
-    url += `&full_name.contains=${encodeURIComponent(searchQuery.trim())}`;
+    const trimmedQuery = searchQuery.trim();
+    const encodedQuery = encodeURIComponent(trimmedQuery);
+    url += `&full_name.contains=${encodedQuery}`;
   }
 
   const makeRequest = async (token) => {
@@ -195,79 +195,196 @@ export const fetchUsers = async (pageNum = 1, limit = 20, searchQuery = '') => {
 
     let response = await makeRequest(token);
 
-    if (response.data && response.data.success && response.data.data) {
-      const users = response.data.data.data.map((user) => ({
-        id: user.id,
-        name: user.full_name,
-        email: user.email,
-        whatsapp: user.whatsapp,
+    if (response.data && response.data.success === true) {
+      // Ambil data users, jika null atau undefined gunakan array kosong
+      const usersData = response.data.data?.data || [];
+      
+      // Pastikan usersData adalah array
+      const usersArray = Array.isArray(usersData) ? usersData : [];
+      
+      const users = usersArray.map((user) => ({
+        id: user.id || '',
+        name: user.full_name || 'Unknown User',
+        email: user.email || '',
+        whatsapp: user.whatsapp || '',
         lastMessage: '',
         lastMessageTime: null,
-        timestamp: formatTimestamp(user.created_at),
+        timestamp: user.created_at ? formatTimestamp(user.created_at) : 'New',
         unreadCount: 0,
-        avatar: getAvatarInitials(user.full_name),
+        avatar: user.full_name ? getAvatarInitials(user.full_name) : '👤',
         verified: user.verified?.verified || false,
         status: user.status || 'offline',
-        detail_id: user.detail_id,
+        detail_id: user.detail_id || '',
       }));
       
       return {
         success: true,
         users: users,
         pagination: {
-          currentPage: response.data.data.page,
-          totalPage: response.data.data.total_page,
-          totalRows: response.data.data.total_rows,
-          hasMore: response.data.data.page < response.data.data.total_page
+          currentPage: response.data.data?.page || pageNum,
+          totalPage: response.data.data?.total_page || 1,
+          totalRows: response.data.data?.total_rows || 0,
+          hasMore: (response.data.data?.page || pageNum) < (response.data.data?.total_page || 1)
         }
       };
     } else {
-      return { success: false, error: response.data?.message || 'Gagal mengambil data user' };
+      return { 
+        success: false, 
+        users: [],
+        error: response.data?.message || 'Gagal mengambil data user' 
+      };
     }
   } catch (error) {
-    // Handle error dan refresh token (sama seperti kode lama)
-    // ... (pertahankan kode existing untuk handle error)
     if (error.response && error.response.status === 401) {
-      console.log('Token expired, attempting to refresh...');
       try {
         const newToken = await refreshAccessToken();
         let response = await makeRequest(newToken);
-        if (response.data && response.data.success && response.data.data) {
-          const users = response.data.data.data.map((user) => ({
-            id: user.id,
-            name: user.full_name,
-            email: user.email,
-            whatsapp: user.whatsapp,
+        
+        if (response.data && response.data.success === true) {
+          const usersData = response.data.data?.data || [];
+          const usersArray = Array.isArray(usersData) ? usersData : [];
+          
+          const users = usersArray.map((user) => ({
+            id: user.id || '',
+            name: user.full_name || 'Unknown User',
+            email: user.email || '',
+            whatsapp: user.whatsapp || '',
             lastMessage: '',
             lastMessageTime: null,
-            timestamp: formatTimestamp(user.created_at),
+            timestamp: user.created_at ? formatTimestamp(user.created_at) : 'New',
             unreadCount: 0,
-            avatar: getAvatarInitials(user.full_name),
+            avatar: user.full_name ? getAvatarInitials(user.full_name) : '👤',
             verified: user.verified?.verified || false,
             status: user.status || 'offline',
-            detail_id: user.detail_id,
+            detail_id: user.detail_id || '',
           }));
+          
           return {
             success: true,
             users: users,
             pagination: {
-              currentPage: response.data.data.page,
-              totalPage: response.data.data.total_page,
-              totalRows: response.data.data.total_rows,
-              hasMore: response.data.data.page < response.data.data.total_page
+              currentPage: response.data.data?.page || pageNum,
+              totalPage: response.data.data?.total_page || 1,
+              totalRows: response.data.data?.total_rows || 0,
+              hasMore: false
             }
           };
-        } else {
-          return { success: false, error: response.data?.message || 'Gagal mengambil data user setelah refresh' };
         }
       } catch (refreshError) {
-        console.error('Failed to refresh token:', refreshError);
-        return { success: false, error: 'Session expired. Please login again.' };
+        return { success: false, users: [], error: 'Session expired' };
       }
-    } else {
-      console.error('Error fetching users:', error);
-      return { success: false, error: error.message || 'Network error occurred' };
     }
+    
+    return { success: false, users: [], error: 'Network error' };
+  }
+};
+
+export const fetchAllUsers = async (pageNum = 1, limit = 20, searchQuery = '') => {
+  let url = `${API_BASE_URL}/merchant/user/all?page=${pageNum}&limit=${limit}&sort=created_at desc`;
+  if (searchQuery && searchQuery.trim() !== '') {
+    const trimmedQuery = searchQuery.trim();
+    const encodedQuery = encodeURIComponent(trimmedQuery);
+    url += `&id.contains=${encodedQuery}`;
+  }
+
+  const makeRequest = async (token) => {
+    return await axios.get(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'x-api-key': API_KEY
+      }
+    });
+  };
+
+  try {
+    let token = await getAccessToken();
+    if (!token) throw new Error('Token tidak ditemukan');
+
+    let response = await makeRequest(token);
+
+    if (response.data && response.data.success === true) {
+      // Ambil data users, jika null atau undefined gunakan array kosong
+      const usersData = response.data.data?.data || [];
+      
+      // Pastikan usersData adalah array
+      const usersArray = Array.isArray(usersData) ? usersData : [];
+      
+      const users = usersArray.map((user) => ({
+        id: user.id || '',
+        name: user.full_name || 'Unknown User',
+        email: user.email || '',
+        whatsapp: user.whatsapp || '',
+        lastMessage: '',
+        lastMessageTime: null,
+        timestamp: user.created_at ? formatTimestamp(user.created_at) : 'New',
+        unreadCount: 0,
+        avatar: user.full_name ? getAvatarInitials(user.full_name) : '👤',
+        verified: user.verified?.verified || false,
+        status: user.status || 'offline',
+        detail_id: user.detail_id || '',
+      }));
+      
+      return {
+        success: true,
+        users: users,
+        pagination: {
+          currentPage: response.data.data?.page || pageNum,
+          totalPage: response.data.data?.total_page || 1,
+          totalRows: response.data.data?.total_rows || 0,
+          hasMore: (response.data.data?.page || pageNum) < (response.data.data?.total_page || 1)
+        }
+      };
+    } else {
+      return { 
+        success: false, 
+        users: [],
+        error: response.data?.message || 'Gagal mengambil data user' 
+      };
+    }
+  } catch (error) {
+    if (error.response && error.response.status === 401) {
+      try {
+        const newToken = await refreshAccessToken();
+        let response = await makeRequest(newToken);
+        
+        if (response.data && response.data.success === true) {
+          const usersData = response.data.data?.data || [];
+          const usersArray = Array.isArray(usersData) ? usersData : [];
+          
+          const users = usersArray.map((user) => ({
+            id: user.id || '',
+            name: user.full_name || 'Unknown User',
+            email: user.email || '',
+            whatsapp: user.whatsapp || '',
+            lastMessage: '',
+            lastMessageTime: null,
+            timestamp: user.created_at ? formatTimestamp(user.created_at) : 'New',
+            unreadCount: 0,
+            avatar: user.full_name ? getAvatarInitials(user.full_name) : '👤',
+            verified: user.verified?.verified || false,
+            status: user.status || 'offline',
+            detail_id: user.detail_id || '',
+          }));
+          
+          return {
+            success: true,
+            users: users,
+            pagination: {
+              currentPage: response.data.data?.page || pageNum,
+              totalPage: response.data.data?.total_page || 1,
+              totalRows: response.data.data?.total_rows || 0,
+              hasMore: false
+            }
+          };
+        }
+      } catch (refreshError) {
+        return { success: false, users: [], error: 'Session expired' };
+      }
+    }
+    
+    return { success: false, users: [], error: 'Network error' };
   }
 };
 

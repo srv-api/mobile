@@ -75,7 +75,7 @@ export const fetchExploreData = async () => {
     });
 
     if (response.data.status && response.data.data.users) {
-      return response.data.data.users;
+      return response.data.data;
     } else {
       console.log('No users found');
       return [];
@@ -117,6 +117,36 @@ export const sendLike = async (targetUserId, isSuperLike = false) => {
     return response.data;
   } catch (error) {
     console.error('❌ Error sending like:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const createBoost = async () => {
+  try {
+    const token = await getAuthToken();
+
+    if (!token) {
+      throw new Error('Token tidak ditemukan');
+    }
+
+    const response = await axios.post(
+      'http://103.150.227.223:2388/boost/create',
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error(
+      '❌ Error create boost:',
+      error.response?.data || error.message,
+    );
+
     throw error;
   }
 };
